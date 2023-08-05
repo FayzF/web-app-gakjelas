@@ -12,25 +12,13 @@
     />
   </head>
   <body>
-    <% if(validName && validEmail && sign){ %>
-    <div class="alert alert-success alert-dismissible fade show" role="alert">
-      <strong
-        >Login Berhasil!<br />
-        <p>Kembali ke <a href="/">Home</a>?</p>
-      </strong>
-      <button
-        type="button"
-        class="btn-close"
-        data-bs-dismiss="alert"
-        aria-label="Close"
-      ></button>
-    </div>
-    <%}else if (sign){%>
+    <% let data = "" %> <%if (duplicate && !duplicateEmail){ data = "nama" }else
+    if (duplicateEmail && !duplicate){ data = "email" } else if (duplicate &&
+    duplicateEmail){ data = "nama dan email" }%> <% if(duplicate ||
+    duplicateEmail){ %>
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-      <strong
-        >Login Gagal!<br />
-        Harap masukkan nama atau email yang sesuai
-      </strong>
+      <strong>SignIn Gagal!<br /></strong> <%= data %> yang anda masukkan telah
+      digunakan , harap masukkan nama lain
       <button
         type="button"
         class="btn-close"
@@ -38,11 +26,10 @@
         aria-label="Close"
       ></button>
     </div>
-
-    <% } %>
+    <% }%>
     <div class="container">
       <div class="row d-flex justify-content-center align-items-center">
-        <form action="/login" method="post">
+        <form action="/signin" method="post">
           <div class="mb-3">
             <label for="userName" class="form-label">User Name</label>
             <input type="text" class="form-control" required name="name" />
@@ -62,7 +49,6 @@
           </div>
           <button type="submit" class="btn btn-primary">Submit</button>
         </form>
-        <p>Belum mempunyai akun? Buat di <a href="signin">Sini</a></p>
       </div>
     </div>
     <script

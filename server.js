@@ -1,81 +1,100 @@
-// Module
 const ejs = require("ejs");
 const express = require("express");
 const app = express();
 const bodyParser = require("body-parser");
-const mongoose = require("mongoose");
-const { Script } = require("vm");
+const accounts = require("./utils/accounts");
+const { getWeatherData, calendar, gretings } = require("./utils/widget");
 
 // SET UP
 app.set("view engine", "ejs");
 app.use(bodyParser.urlencoded({ extended: false }));
-// menghubungkan ke database
-const dbUrl = "mongodb://127.0.0.1:27017/login";
-mongoose
-  .connect(dbUrl, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
-  .then(() => {
-    console.log("berhasil terhubung ke database");
-  })
-  .catch((err) => {
-    console.log("ERROR to connecting MongoDB:", err);
-  });
 
-// Menentukan Schema dari database
-const userSchema = mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true },
+app.get("/sse-data", async (req, res) => {
+  try {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    const weather = await getWeatherData();
+    const calnd = calendar();
+
+    setInterval(() => {
+      const data = JSON.stringify({ weather, calnd });
+      res.write(`data: ${data}\n\n`);
+    }, 1000);
+  } catch (err) {
+    console.error("Error fetching data", err);
+    res.status(500).end();
+  }
 });
-// Mengambil database Users
-const User = mongoose.model("User", userSchema);
 
-//Merender halaman "/"
+// Render halaman "/"
 app.get("/", async (req, res) => {
   try {
-    const users = await User.find();
-    if (users.length == 0) {
-      let empty = true;
-      res.render("index", { users, empty });
-    } else {
-      res.render("index", { users, empty: false });
-    }
+    const weather = await getWeatherData();
+    const users = await accounts.User.find();
+    const calnd = calendar();
+    const greting = gretings();
+    const empty = users.length === 0;
+    res.render("index", { users, empty, weather, calnd, greting });
   } catch (err) {
-    console.error("Error cannot find data", err);
+    console.error("Error retrieving data", err);
     res.status(500).send(`Internal server error`);
   }
 });
 
 // Merender halaman "/login"
-app.get("/login", (req, res) => {
-  res.render("login");
+app.get("/login", async (req, res) => {
+  res.render("login", {
+    validName: false,
+    validEmail: false,
+    sign: false,
+  });
 });
 
 //Menerima data dari halaman login
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
+  // Value dari data yang diterima
+  const username = req.body.name;
+  const email = req.body.email;
+  const sign = true;
+  const validName = await accounts.User.findOne({ name: username });
+  const validEmail = await accounts.User.findOne({ email: email });
+  res.render("login", { validName, validEmail, sign });
+});
+
+app.get("/signin", async (req, res) => {
+  res.render("signin", { duplicate: false, duplicateEmail: false });
+});
+
+app.post("/signin", async (req, res) => {
   // Value dari data yang diterima
   const username = req.body.name;
   const email = req.body.email;
 
   // Memasukkan value ke dalam database
-  const newUser = new User({
+  const newUser = new accounts.User({
     name: username,
     email: email,
   });
-
-  // Menyimpan data
-  newUser
-    .save()
-    .then((result) => {
-      console.log(result);
-    })
-    .catch((err) => {
-      console.error("Error gagal mengirimkan data:", err);
-      res.status(500).send("gagal mengirimkan data");
-    });
-  // Kembali ke halaman "/"
-  res.redirect("/");
+  const duplicate = await accounts.User.findOne({ name: username });
+  const duplicateEmail = await accounts.User.findOne({ email: email });
+  if (duplicate || duplicateEmail) {
+    res.render("signin", { duplicate, duplicateEmail });
+  } else {
+    // Menyimpan data
+    newUser
+      .save()
+      .then((result) => {
+        console.log(result);
+      })
+      .catch((err) => {
+        console.error("Error gagal mengirimkan data:", err);
+        res.status(500).send("gagal mengirimkan data");
+      });
+    // Kembali ke halaman "/login"
+    res.redirect("/login");
+  }
 });
 
 // Halaman default yang merespon status 404(TIDAK DITEMUKAN)
@@ -87,7 +106,7 @@ app.use((req, res) => {
     );
 });
 
-// Membuat Server Mendengar di Port bawah
+// Memulai server js
 const port = 3000;
 app.listen(port, () => {
   console.log(`Server is listening on http://localhost:${port}`);
